@@ -1193,7 +1193,6 @@ class ReceiptJsonGenerator:
         return invoice_num[-k:]
 
     def random_cart(self):
-        # item_name/desription, (qty), price/rm/dolloar(货币单位), amount/
         unit = random.choice(UNITS)
         num_of_item = random.randint(1, 20)
         cart = []
@@ -1215,16 +1214,72 @@ class ReceiptJsonGenerator:
         return {
             "unit": unit,
             "items": cart,
+            "ratio": ratio,
             "large_item": large_item,
-            "Total Exclude GST": total,
-            f"Total GST @{ratio}%": tax,
-            "Total Inclusive GST": total + tax,
-            "Round Amt": total + tax,
+            "t_wo_gst": total,
+            "gst": tax,
+            "t_w_gst": total + tax,
         }
 
     def deal(self, cart):
         # remember we have different type of table to represent the cart
-        pass
+        """
+        'cart': {'unit': 'Riyal',
+                'items': [('schedule legs', 5, 50.94, 254.7),
+                ('helmsman mint', 10, 19.38, 193.79999999999998),
+                ('levels corks', 10, 71.57, 715.6999999999999),
+                ('print span', 1, 97.3, 97.3),
+                ('collision accountabilities', 10, 39.4, 394.0),
+                ('view rescue', 2, 47.48, 94.96),
+                ('tools store', 1, 28.04, 28.04),
+                ('employees kilograms', 6, 49.0, 294.0),
+                ('console energizers', 4, 97.64, 390.56),
+                ('contacts parameter', 3, 44.48, 133.44),
+                ('assemblies spacer', 2, 26.67, 53.34),
+                ('shift animal', 6, 41.49, 248.94),
+                ('recordkeeping preserver', 2, 5.56, 11.12),
+                ('stomachs trade', 3, 53.16, 159.48),
+                ('heights place', 7, 9.3, 65.10000000000001)],
+                'large_item': False,
+                "t_wo_gst": total,
+                "gst": tax,
+                "ratio": ratio,
+                "t_w_gst": total + tax,
+                "r_t_w_gst": total + tax,}
+        """
+        # item_name/desription, (qty), price, amount
+        item_alias = ["Description", "Item", "Item name"]
+        qty_alis = ["Qty"]
+        price_alias = ["Price", cart["unit"]]
+        amount_alias = ["Amount"]
+        lines = [
+            [
+                random.choice(item_alias),
+                random.choice(qty_alis),
+                random.choice(price_alias),
+                random.choice(amount_alias),
+            ]
+        ]
+
+        def format(price):
+            if cart["large_item"]:
+                return f"{price:,.0f}"
+            else:
+                return f"{price:,.2f}"
+
+        for item in cart["items"]:
+            lines.append([item[0], str(item[1]), format(item[2]), format(item[3])])
+
+        t_wo_gst_alis = ["Total w/o GST", "Total Exclude GST"]
+        t_gst_alis = [f"Total Exclude GST @{cart['ratio']}%"]
+        t_w_gst_alis = [f"Total Include GST"]
+        r_t_w_gst_alis = ["Round Amt"]
+        lines.append([random.choice(t_wo_gst_alis), "", "", format(cart["t_wo_gst"])])
+        lines.append([random.choice(t_gst_alis), "", "", format(cart["gst"])])
+        lines.append([random.choice(t_w_gst_alis), "", "", format(cart["t_w_gst"])])
+        lines.append([random.choice(r_t_w_gst_alis), "", "", format(cart["t_w_gst"])])
+        lines.append(["Total", "", "", format(cart["t_w_gst"])])
+        return lines
 
     def __call__(self):
         cart = self.random_cart()
@@ -1256,7 +1311,9 @@ class ReceiptJsonGenerator:
                 ["Cashier", ":" + self.random_item(2).upper()],
                 ["Sales Persor", ":" + self.random_item(1).upper()],
                 ["Bill To", ":" + self.random_item(3)],
-                # self.deal(cart),
+            ]
+            + self.deal(cart)
+            + [
                 ["Approval Code", ":" + str(random.randint(100, 999))],
                 ["VISA CARD", ":" + self.random_visa_number()],
                 [random.choice(ENDING)],
@@ -1284,18 +1341,24 @@ class ReceiptImgGenerator:
             raise ValueError("Texts should not be empty.")
 
         # check if the number of texts and intervals are the same
-        if intervals is not None:
-            assert len(texts) == len(
-                intervals
-            ), "The number of texts and intervals should be the same."
-            # interal is the ratio of the width
-            total_interval = sum(intervals)
-            # calculate the width of each text
-            text_widths = [
+        if intervals is None:
+            intervals = [2] + [1] * (len(texts)-1)
+        total_interval = sum(intervals)
+        text_widths = [
                 int(width * interval / total_interval) for interval in intervals
             ]
-        else:
-            text_widths = [width // len(texts) for _ in range(len(texts))]
+        # if intervals is not None:
+        #     assert len(texts) == len(
+        #         intervals
+        #     ), "The number of texts and intervals should be the same."
+        #     # interal is the ratio of the width
+        #     total_interval = sum(intervals)
+        #     # calculate the width of each text
+        #     text_widths = [
+        #         int(width * interval / total_interval) for interval in intervals
+        #     ]
+        # else:
+        #     text_widths = [width // len(texts) for _ in range(len(texts))]
 
         # add text to the page
         last_x = 0
@@ -1321,8 +1384,8 @@ class ReceiptImgGenerator:
         rec: dict,
         min_width=256,
         max_width=512,
-        min_ratio=2,
-        max_ratio=2,
+        min_ratio=3,
+        max_ratio=3,
         min_w_edge_dist=0.1,
         max_w_edge_dist=0.15,
         min_h_edge_dist=0.05,
@@ -1367,7 +1430,7 @@ class ReceiptImgGenerator:
                 rc = -1
                 while rc < 0 and fs > 6:
                     # randomly upper or lower the txt
-                    txt = txt.upper() if random.choice([True, False]) else txt.lower()
+                    # txt = txt.upper() if random.choice([True, False]) else txt.lower()
                     rc = page.insert_textbox(
                         rect, txt, fontsize=fs, fontname=font_name, align=0
                     )
