@@ -1071,9 +1071,10 @@ class ReceiptJsonGenerator:
     def random_email(self):
         prefix_length = random.randint(5, 10)
         prefix = "".join(
-            random.choices(string.ascii_letters + string.digits, k=prefix_length)
+            random.choices(
+                string.ascii_letters.lower() + string.digits, k=prefix_length
+            )
         )
-
         return prefix + "@" + random.choice(MAIL_END)
 
     def random_phone(self):
@@ -1168,8 +1169,8 @@ class ReceiptJsonGenerator:
     def random_sep(self):
         return random.choice(SEP_LIST)
 
-    def random_item(self, num=2):
-        return " ".join(self.rw.random_words(count=num))
+    def random_item(self, num=1):
+        return " ".join(self.rw.random_words(count=num))[:12]
 
     def random_address(self):
         return real_random_address()
@@ -1194,7 +1195,7 @@ class ReceiptJsonGenerator:
 
     def random_cart(self):
         unit = random.choice(UNITS)
-        num_of_item = random.randint(1, 20)
+        num_of_item = random.randint(1, 10)
         cart = []
         large_item = random.choice([True, False])
         total = 0
@@ -1252,14 +1253,24 @@ class ReceiptJsonGenerator:
         qty_alis = ["Qty"]
         price_alias = ["Price", cart["unit"]]
         amount_alias = ["Amount"]
-        lines = [
-            [
-                random.choice(item_alias),
-                random.choice(qty_alis),
-                random.choice(price_alias),
-                random.choice(amount_alias),
+        include_qty_in_desc = random.choice([True, False])
+        if include_qty_in_desc:
+            lines = [
+                [
+                    random.choice(item_alias),
+                    random.choice(price_alias),
+                    random.choice(amount_alias),
+                ]
             ]
-        ]
+        else:
+            lines = [
+                [
+                    random.choice(item_alias),
+                    random.choice(qty_alis),
+                    random.choice(price_alias),
+                    random.choice(amount_alias),
+                ]
+            ]
 
         def format(price):
             if cart["large_item"]:
@@ -1268,7 +1279,22 @@ class ReceiptJsonGenerator:
                 return f"{price:,.2f}"
 
         for item in cart["items"]:
-            lines.append([item[0], str(item[1]), format(item[2]), format(item[3])])
+            if include_qty_in_desc:
+                lines.append(
+                    [
+                        str(item[1]) + " x  " + item[0],
+                        format(item[2]),
+                        format(item[3]),
+                    ]
+                )
+                lines.append(
+                    ["Total Qty :", str(item[1])]
+                )
+            else:
+                lines.append([item[0], str(item[1]), format(item[2]), format(item[3])])
+                lines.append(
+                    ["Total Qty :", str(item[1])]
+                )
 
         t_wo_gst_alis = ["Total w/o GST", "Total Exclude GST"]
         t_gst_alis = [f"Total Exclude GST @{cart['ratio']}%"]
@@ -1287,37 +1313,60 @@ class ReceiptJsonGenerator:
         finish = False
         while finish == False:
             address = self.random_address()
+            if "address1" in address:
+                addr1 = address["address1"]
+            else:
+                addr1 = self.random_item(2)
+
+            if "city" in address:
+                city = address["city"]
+            else:
+                city = self.random_item(1)
+
+            if "state" in address:
+                state = address["state"]
+            else:
+                state = self.random_item(1)
+
+            if "postalCode" in address:
+                postalCode = address["postalCode"]
+            else:
+                postalCode = self.randomint(10000, 99999)
+
             address_string = [
-                address["address1"].upper(),
-                str(address["postalCode"])
-                + " "
-                + address["city"].upper()
-                + ", "
-                + address["state"].upper(),
+                [addr1.upper()],
+                [str(postalCode) + " " + city.upper() + ", " + state.upper()],
             ]
             finish = True
-        object = {
-            "content": [
-                [self.random_item(3).upper()],
-                address_string,
-                ["ROC NO", ":" + str(self.invoice_number())],
-                ["Invoice No", ":" + self.invoice_number()],
-                ["Company Reg No", ":" + self.invoice_number()],
-                ["GST Reg No", ":" + self.invoice_number()],
-                ["TEL" + ":" + self.random_phone()],
-                ["FAX" + ":" + self.random_fax()],
-                ["Email" + ":" + self.random_email()],
-                ["Date", ":" + date],
-                ["Cashier", ":" + self.random_item(2).upper()],
-                ["Sales Persor", ":" + self.random_item(1).upper()],
-                ["Bill To", ":" + self.random_item(3)],
-            ]
-            + self.deal(cart)
+        sep = self.random_sep()
+        content = (
+            [[self.random_item(3).upper()]]
+            + address_string
             + [
-                ["Approval Code", ":" + str(random.randint(100, 999))],
-                ["VISA CARD", ":" + self.random_visa_number()],
+                ["ROC NO", ": " + str(self.invoice_number())],
+                ["Invoice No", ": " + self.invoice_number()],
+                ["Company Reg No", ": " + self.invoice_number()],
+                ["GST Reg No", ": " + self.invoice_number()],
+                ["TEL" + ": " + self.random_phone()],
+                ["FAX" + ": " + self.random_fax()],
+                ["Email" + ": " + self.random_email()],
+                ["Date", ": " + date],
+                ["Cashier", ": " + self.random_item(2).upper()],
+                ["Sales Persor", ": " + self.random_item(1).upper()],
+                ["Bill To", ": " + self.random_item(2)],
+            ]
+            + [sep*40]
+            + self.deal(cart)
+            + [sep*40]
+            + [
+                ["Approval Code", ": " + str(random.randint(100, 999))],
+                ["VISA CARD", ": " + self.random_visa_number()],
                 [random.choice(ENDING)],
-            ],
+            ]
+        )
+
+        object = {
+            "content": content,
             "sep": self.random_sep(),
         }
         return object
@@ -1342,11 +1391,11 @@ class ReceiptImgGenerator:
 
         # check if the number of texts and intervals are the same
         if intervals is None:
-            intervals = [2] + [1] * (len(texts)-1)
+            intervals = [2] + [1] * (len(texts) - 1)
+        if len(texts) == 2:
+            intervals = [1, 2]
         total_interval = sum(intervals)
-        text_widths = [
-                int(width * interval / total_interval) for interval in intervals
-            ]
+        text_widths = [int(width * interval / total_interval) for interval in intervals]
         # if intervals is not None:
         #     assert len(texts) == len(
         #         intervals
@@ -1373,7 +1422,8 @@ class ReceiptImgGenerator:
                     height,
                     text,
                     font_size,
-                    random.choice(BASE_FONTNAME),
+                    BASE_FONTNAME[2]
+                    # random.choice(BASE_FONTNAME),
                 )
             )
             last_x += text_widths[i]
@@ -1382,15 +1432,15 @@ class ReceiptImgGenerator:
     def __call__(
         self,
         rec: dict,
-        min_width=256,
-        max_width=512,
+        min_width=300,
+        max_width=300,
         min_ratio=3,
         max_ratio=3,
-        min_w_edge_dist=0.1,
+        min_w_edge_dist=0.05,
         max_w_edge_dist=0.15,
         min_h_edge_dist=0.05,
         max_h_edge_dist=0.1,
-        base_font=18,
+        base_font=17,
     ):
         # better estimation is needed
         width = random.randint(min_width, max_width)
@@ -1408,6 +1458,9 @@ class ReceiptImgGenerator:
 
         # background color
         background_color = (0.5, 0.5, 1)
+        background_color = (241 / 256, 242 / 256, 247 / 256)
+        # [166, 180, 163]
+        # background_color = (166/256, 180/256, 163/256)
         page.draw_rect(
             fitz.Rect(0, 0, width, height),
             color=background_color,
@@ -1432,7 +1485,12 @@ class ReceiptImgGenerator:
                     # randomly upper or lower the txt
                     # txt = txt.upper() if random.choice([True, False]) else txt.lower()
                     rc = page.insert_textbox(
-                        rect, txt, fontsize=fs, fontname=font_name, align=0
+                        rect,
+                        txt,
+                        fontsize=fs,
+                        fontname=font_name,
+                        align=1,
+                        color=(166 / 256, 180 / 256, 163 / 256),
                     )
                     fs -= 1
 
